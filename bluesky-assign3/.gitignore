@@ -6,3 +6,7 @@
 *__pycache__
 node_modules
 .venv
+
+gov_org_posts.json
+profile_analysis.json
+sample_results.json
