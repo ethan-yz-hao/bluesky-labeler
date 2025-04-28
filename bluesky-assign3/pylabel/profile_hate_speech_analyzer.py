@@ -10,6 +10,7 @@ import openai
 from atproto import Client
 from dotenv import load_dotenv
 from label import did_from_handle, label_post, post_from_url
+import sys
 
 # Load credentials from .env
 load_dotenv(override=True)
@@ -30,15 +31,32 @@ class HateSpeechDetector:
         # Verify API key is set
         if not OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
+        
+        # Try to install spaCy if needed
+        try:
+            import spacy
+            try:
+                self.nlp = spacy.load("en_core_web_sm")
+                print("Loaded spaCy model for text processing")
+            except OSError:
+                print("SpaCy model not found. Installing...")
+                import subprocess
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "spacy"])
+                subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
+                self.nlp = spacy.load("en_core_web_sm")
+        except Exception as e:
+            print(f"Could not load spaCy: {e}")
+            print("Falling back to basic text processing")
+            self.nlp = None
             
         # Load HurtLex dictionary
-        self.hurtlex_terms = self._load_hurtlex()
+        self.hurtlex_terms, self.hurtlex_categories = self._load_hurtlex()
         print(f"Loaded {len(self.hurtlex_terms)} HurtLex terms")
     
     def _load_hurtlex(self):
-        """Load HurtLex dictionary for English language."""
+        """Load HurtLex dictionary for English language with category information."""
         try:
-            # Path to HurtLex file - adjust as needed
+            # Path to HurtLex file
             hurtlex_path = os.path.join(os.path.dirname(__file__), "data", "hurtlex_EN.tsv")
             
             # If file doesn't exist, download it
@@ -51,92 +69,127 @@ class HateSpeechDetector:
                 with open(hurtlex_path, 'wb') as f:
                     f.write(response.content)
             
-            # Load terms from file
-            terms = set()
+            # Load terms from file with their categories
+            terms = {}
+            categories = {
+                "PS": "Negative stereotypes ethnic slurs",
+                "RCI": "Locations and demonyms",
+                "PA": "Professions and occupations",
+                "DDF": "Physical disabilities and diversity",
+                "DDP": "Cognitive disabilities and diversity",
+                "DMC": "Moral and behavioral defects",
+                "IS": "Words related to social and economic disadvantage",
+                "OR": "Plants",
+                "AN": "Animals",
+                "ASM": "Male genitalia",
+                "ASF": "Female genitalia",
+                "PR": "Words related to prostitution",
+                "OM": "Words related to homosexuality",
+                "QAS": "With potential negative connotations",
+                "CDS": "Derogatory words",
+                "RE": "Felonies and words related to crime and immoral behavior",
+                "SVP": "Words related to the seven deadly sins of the Christian tradition"
+            }
+            
             with open(hurtlex_path, 'r', encoding='utf-8') as f:
                 # Skip header
                 next(f)
                 for line in f:
                     parts = line.strip().split('\t')
-                    if len(parts) >= 5:  # Make sure we have enough columns
-                        # Add the lemma (term) - it's in column 5 (index 4)
+                    if len(parts) >= 5:
                         lemma = parts[4].lower()
-                        # Handle multi-word terms by adding both the full term and individual words
-                        terms.add(lemma)
-                        # For multi-word terms, add individual words too
-                        if ' ' in lemma:
-                            for word in lemma.split():
-                                if len(word) > 2:  # Skip very short words
-                                    terms.add(word)
+                        category = parts[2]
+                        
+                        # Store the term with its category
+                        terms[lemma] = {"category": category}
             
             print(f"Loaded {len(terms)} HurtLex terms")
-            if len(terms) < 100:  # Sanity check
-                print(f"Warning: Only loaded {len(terms)} terms, which seems low")
-                print(f"Sample terms: {list(terms)[:20]}")
             
-            return terms
+            return terms, categories
             
         except Exception as e:
             print(f"Error loading HurtLex: {e}")
-            # Return empty set if loading fails
-            return set()
+            # Return empty dict if loading fails
+            return {}, {}
     
     def _check_hurtlex(self, text: str) -> Dict[str, Any]:
         """
         Check text against HurtLex dictionary.
         
         Returns:
-            Dictionary with hate speech probability based on HurtLex matches
+            Dictionary with hate probability and matched terms
         """
         if not text or not self.hurtlex_terms:
-            print("No text or HurtLex terms available")
-            return {"hate_probability": 0.0, "matched_terms": []}
+            return {"hate_probability": 0.0, "matched_terms": [], "categories": {}}
         
         # Normalize text
         text = text.lower()
-        # Split on whitespace and remove punctuation
-        words = [word.strip(".,!?;:\"'()[]{}") for word in text.split()]
         
-        # Find matches - check both individual words and n-grams
+        # Process with spaCy if available, otherwise use basic tokenization
+        if self.nlp:
+            doc = self.nlp(text)
+            # Get lemmas for checking
+            words = [token.lemma_ for token in doc]
+        else:
+            # Basic tokenization without lemmatization
+            words = [word.strip(".,!?;:\"'()[]{}") for word in text.split()]
+        
+        # Find matches
         matched_terms = []
+        matched_categories = {}
         
-        # Check individual words
+        # Check words against HurtLex
         for word in words:
             if word in self.hurtlex_terms:
                 matched_terms.append(word)
+                category = self.hurtlex_terms[word]["category"]
+                matched_categories[category] = matched_categories.get(category, 0) + 1
         
-        # Check bigrams (pairs of words)
-        for i in range(len(words) - 1):
-            bigram = words[i] + " " + words[i+1]
-            if bigram in self.hurtlex_terms:
-                matched_terms.append(bigram)
+        # Calculate probability
+        if not matched_terms:
+            return {"hate_probability": 0.0, "matched_terms": [], "categories": {}}
         
-        # Check trigrams (triplets of words)
-        for i in range(len(words) - 2):
-            trigram = words[i] + " " + words[i+1] + " " + words[i+2]
-            if trigram in self.hurtlex_terms:
-                matched_terms.append(trigram)
+        # Weight categories by severity
+        category_weights = {
+            "PS": 1.0,    # Negative stereotypes ethnic slurs
+            "IS": 1.0,    # Words related to social and economic disadvantage
+            "RE": 0.9,    # Felonies and words related to crime and immoral behavior
+            "DDF": 0.9,   # Physical disabilities and diversity
+            "DDP": 0.9,   # Cognitive disabilities and diversity
+            "ASM": 0.8,   # Male genitalia
+            "ASF": 0.8,   # Female genitalia
+            "PR": 0.8,    # Words related to prostitution
+            "OM": 0.8,    # Words related to homosexuality
+            "CDS": 0.7,   # Derogatory words
+            "DMC": 0.7,   # Moral and behavioral defects
+            "PA": 0.6,    # Professions and occupations
+            "AN": 0.5,    # Animals
+            "OR": 0.4,    # Plants
+            "QAS": 0.4,   # With potential negative connotations
+            "RCI": 0.3,   # Locations and demonyms
+            "SVP": 0.6    # Words related to the seven deadly sins
+        }
         
-        # Calculate probability based on proportion of matched terms
-        if not words:
-            return {"hate_probability": 0.0, "matched_terms": []}
-            
-        # Calculate hate probability based on proportion of matched terms
-        # Use a more sensitive formula - even one match could be significant
-        if matched_terms:
-            # Base probability on number of matches and their proportion in the text
-            hate_probability = min(1.0, (len(matched_terms) / len(words) * 3) + 0.2)
-        else:
-            hate_probability = 0.0
+        # Calculate weighted score based on category severity
+        weighted_score = 0
+        for category, count in matched_categories.items():
+            weight = category_weights.get(category, 0.5)
+            weighted_score += count * weight
         
-        print(f"HurtLex check: Found {len(matched_terms)} matches in {len(words)} words")
-        if matched_terms:
-            print(f"Matched terms: {matched_terms}")
-        print(f"HurtLex hate probability: {hate_probability}")
+        # Normalize by text length with a scaling factor
+        text_length = len(words)
+        hate_probability = min(1.0, weighted_score / max(1, text_length) * 3)
+        
+        # Convert category codes to readable names
+        readable_categories = {}
+        for cat, count in matched_categories.items():
+            readable_name = self.hurtlex_categories.get(cat, cat)
+            readable_categories[readable_name] = count
         
         return {
             "hate_probability": hate_probability,
-            "matched_terms": matched_terms
+            "matched_terms": matched_terms,
+            "categories": readable_categories
         }
     
     def _download_image_as_base64(self, image_url: str) -> str:
@@ -157,7 +210,7 @@ class HateSpeechDetector:
     def predict(self, post: Dict, threshold: float = 0.5) -> Dict[str, Any]:
         """
         Predict hate speech probability for a single post using a staged approach:
-        1. Check against HurtLex dictionary
+        1. Check against HurtLex dictionary with advanced NLP
         2. If HurtLex doesn't identify as hate speech, use OpenAI for more complex analysis
         
         Args:
@@ -181,12 +234,11 @@ class HateSpeechDetector:
             }
         
         try:
-            # Stage 1: Check against HurtLex
-            print(f"Checking HurtLex for post: {post.get('url', '')}")
+            # Stage 1: Check against HurtLex with advanced NLP
             hurtlex_result = self._check_hurtlex(text)
             hate_prob = hurtlex_result["hate_probability"]
             matched_terms = hurtlex_result["matched_terms"]
-                      
+            matched_categories = hurtlex_result["categories"]
             # If HurtLex score is very low, we can skip OpenAI
             if hate_prob < self.hurtlex_threshold:
                 print(f"HurtLex identified as not hate speech: {hate_prob}")
@@ -218,6 +270,7 @@ class HateSpeechDetector:
             
             # Add information about HurtLex matches if any
             if matched_terms:
+                category_info = ", ".join([f"{cat} ({count})" for cat, count in matched_categories.items()])
                 prompt += f"\n\nNote: The text contains potentially harmful terms: {', '.join(matched_terms)}"
             
             # Add information about images if present
