@@ -21,14 +21,123 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 openai.api_key = OPENAI_API_KEY
 
 class HateSpeechDetector:
-    def __init__(self, model_name: str = "gpt-4o"):
-        """Initialize the hate speech detector with OpenAI."""
+    def __init__(self, model_name: str = "gpt-4o", hurtlex_threshold: float = 0.05):
+        """Initialize the hate speech detector with HurtLex and OpenAI."""
         print(f"Using OpenAI model: {model_name}")
         self.model_name = model_name
+        self.hurtlex_threshold = hurtlex_threshold
         
         # Verify API key is set
         if not OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
+            
+        # Load HurtLex dictionary
+        self.hurtlex_terms = self._load_hurtlex()
+        print(f"Loaded {len(self.hurtlex_terms)} HurtLex terms")
+    
+    def _load_hurtlex(self):
+        """Load HurtLex dictionary for English language."""
+        try:
+            # Path to HurtLex file - adjust as needed
+            hurtlex_path = os.path.join(os.path.dirname(__file__), "data", "hurtlex_EN.tsv")
+            
+            # If file doesn't exist, download it
+            if not os.path.exists(hurtlex_path):
+                os.makedirs(os.path.dirname(hurtlex_path), exist_ok=True)
+                print("Downloading HurtLex dictionary...")
+                # URL for English HurtLex
+                url = "https://github.com/valeriobasile/hurtlex/raw/master/lexica/EN/1.2/hurtlex_EN.tsv"
+                response = requests.get(url)
+                with open(hurtlex_path, 'wb') as f:
+                    f.write(response.content)
+            
+            # Load terms from file
+            terms = set()
+            with open(hurtlex_path, 'r', encoding='utf-8') as f:
+                # Skip header
+                next(f)
+                for line in f:
+                    parts = line.strip().split('\t')
+                    if len(parts) >= 5:  # Make sure we have enough columns
+                        # Add the lemma (term) - it's in column 5 (index 4)
+                        lemma = parts[4].lower()
+                        # Handle multi-word terms by adding both the full term and individual words
+                        terms.add(lemma)
+                        # For multi-word terms, add individual words too
+                        if ' ' in lemma:
+                            for word in lemma.split():
+                                if len(word) > 2:  # Skip very short words
+                                    terms.add(word)
+            
+            print(f"Loaded {len(terms)} HurtLex terms")
+            if len(terms) < 100:  # Sanity check
+                print(f"Warning: Only loaded {len(terms)} terms, which seems low")
+                print(f"Sample terms: {list(terms)[:20]}")
+            
+            return terms
+            
+        except Exception as e:
+            print(f"Error loading HurtLex: {e}")
+            # Return empty set if loading fails
+            return set()
+    
+    def _check_hurtlex(self, text: str) -> Dict[str, Any]:
+        """
+        Check text against HurtLex dictionary.
+        
+        Returns:
+            Dictionary with hate speech probability based on HurtLex matches
+        """
+        if not text or not self.hurtlex_terms:
+            print("No text or HurtLex terms available")
+            return {"hate_probability": 0.0, "matched_terms": []}
+        
+        # Normalize text
+        text = text.lower()
+        # Split on whitespace and remove punctuation
+        words = [word.strip(".,!?;:\"'()[]{}") for word in text.split()]
+        
+        # Find matches - check both individual words and n-grams
+        matched_terms = []
+        
+        # Check individual words
+        for word in words:
+            if word in self.hurtlex_terms:
+                matched_terms.append(word)
+        
+        # Check bigrams (pairs of words)
+        for i in range(len(words) - 1):
+            bigram = words[i] + " " + words[i+1]
+            if bigram in self.hurtlex_terms:
+                matched_terms.append(bigram)
+        
+        # Check trigrams (triplets of words)
+        for i in range(len(words) - 2):
+            trigram = words[i] + " " + words[i+1] + " " + words[i+2]
+            if trigram in self.hurtlex_terms:
+                matched_terms.append(trigram)
+        
+        # Calculate probability based on proportion of matched terms
+        if not words:
+            return {"hate_probability": 0.0, "matched_terms": []}
+            
+        # Calculate hate probability based on proportion of matched terms
+        # Use a more sensitive formula - even one match could be significant
+        if matched_terms:
+            # Base probability on number of matches and their proportion in the text
+            hate_probability = min(1.0, (len(matched_terms) / len(words) * 3) + 0.2)
+        else:
+            hate_probability = 0.0
+        
+        print(f"HurtLex check: Found {len(matched_terms)} matches in {len(words)} words")
+        if matched_terms:
+            print(f"Matched terms: {matched_terms}")
+        print(f"HurtLex hate probability: {hate_probability}")
+        
+        return {
+            "hate_probability": hate_probability,
+            "matched_terms": matched_terms
+        }
     
     def _download_image_as_base64(self, image_url: str) -> str:
         """Download an image and convert it to base64 for API submission."""
@@ -47,7 +156,9 @@ class HateSpeechDetector:
     
     def predict(self, post: Dict, threshold: float = 0.5) -> Dict[str, Any]:
         """
-        Predict hate speech probability for a single post using OpenAI.
+        Predict hate speech probability for a single post using a staged approach:
+        1. Check against HurtLex dictionary
+        2. If HurtLex doesn't identify as hate speech, use OpenAI for more complex analysis
         
         Args:
             post: Post dictionary containing text and image_urls
@@ -65,10 +176,32 @@ class HateSpeechDetector:
                 "text": text,
                 "hate_probability": 0.0,
                 "is_hate_speech": False,
-                "explanation": "Empty post"
+                "explanation": "Empty post",
+                "method": "empty_check"
             }
         
         try:
+            # Stage 1: Check against HurtLex
+            print(f"Checking HurtLex for post: {post.get('url', '')}")
+            hurtlex_result = self._check_hurtlex(text)
+            hate_prob = hurtlex_result["hate_probability"]
+            matched_terms = hurtlex_result["matched_terms"]
+                      
+            # If HurtLex score is very low, we can skip OpenAI
+            if hate_prob < self.hurtlex_threshold:
+                print(f"HurtLex identified as not hate speech: {hate_prob}")
+                return {
+                    "text": text,
+                    "image_count": 0,
+                    "hate_probability": hate_prob,
+                    "is_hate_speech": False,
+                    "explanation": "No hate terms detected",
+                    "post_url": post.get("url", ""),
+                    "uri": post.get("uri", ""),
+                    "method": "hurtlex"
+                }
+            
+            # Stage 2: Use OpenAI for more complex analysis
             # Prepare messages for OpenAI
             messages = [
                 {"role": "system", "content": "You are an AI trained to detect hate speech in text and images."}
@@ -82,6 +215,10 @@ class HateSpeechDetector:
             
             Post text: "{text}"
             """
+            
+            # Add information about HurtLex matches if any
+            if matched_terms:
+                prompt += f"\n\nNote: The text contains potentially harmful terms: {', '.join(matched_terms)}"
             
             # Add information about images if present
             if image_urls:
@@ -142,7 +279,8 @@ class HateSpeechDetector:
                 "is_hate_speech": hate_prob > threshold,
                 "explanation": explanation,
                 "post_url": post.get("url", ""),
-                "uri": post.get("uri", "")
+                "uri": post.get("uri", ""),
+                "method": "openai"
             }
             
         except Exception as e:
@@ -154,7 +292,8 @@ class HateSpeechDetector:
                 "is_hate_speech": False,
                 "error": str(e),
                 "post_url": post.get("url", ""),
-                "uri": post.get("uri", "")
+                "uri": post.get("uri", ""),
+                "method": "error"
             }
 
 def extract_post_data(client: Client, url: str) -> Dict:
@@ -261,6 +400,8 @@ def main():
     parser.add_argument('--model', type=str, default='gpt-4o', help='OpenAI model to use')
     parser.add_argument('--label', type=str, default='hate-speech', help='Label to apply to hate speech posts')
     parser.add_argument('--no-label', action='store_false', help='Only analyze post, do not apply label')
+    parser.add_argument('--hurtlex-threshold', type=float, default=0.05, 
+                        help='Threshold below which HurtLex results are considered negative')
     args = parser.parse_args()
     
     # Initialize client
@@ -268,7 +409,7 @@ def main():
     client.login(USERNAME, PW)
     
     # Initialize hate speech detector
-    detector = HateSpeechDetector(model_name=args.model)
+    detector = HateSpeechDetector(model_name=args.model, hurtlex_threshold=args.hurtlex_threshold)
     
     # Extract post data
     post_data = extract_post_data(client, args.url)
@@ -287,6 +428,7 @@ def main():
     # Print analysis results
     print("\nAnalysis Results:")
     print("-" * 80)
+    print(f"Detection Method: {result.get('method', 'unknown')}")
     print(f"Hate Speech Probability: {result['hate_probability']:.4f}")
     print(f"Classification: {'HATE SPEECH' if result['is_hate_speech'] else 'NOT HATE SPEECH'}")
     print(f"Explanation: {result.get('explanation', 'No explanation provided')}")
