@@ -4,8 +4,7 @@ import time
 import argparse
 import json
 from typing import List, Dict, Any
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import openai
 from atproto import Client
 from dotenv import load_dotenv
 
@@ -13,56 +12,104 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 USERNAME = os.getenv("USERNAME")
 PW = os.getenv("PW")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Configure OpenAI
+openai.api_key = OPENAI_API_KEY
 
 class HateSpeechDetector:
-    def __init__(self, model_name: str = "Hate-speech-CNERG/dehatebert-mono-english"):
-        """Initialize the hate speech detector with the specified model."""
-        print(f"Loading hate speech model: {model_name}")
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
+    def __init__(self, model_name: str = "gpt-4o"):
+        """Initialize the hate speech detector with OpenAI."""
+        print(f"Using OpenAI model: {model_name}")
+        self.model_name = model_name
         
-        # Move to GPU if available
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model.to(self.device)
-        print(f"Model loaded and running on {self.device}")
+        # Verify API key is set
+        if not OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
     
     def predict(self, texts: List[str], threshold: float = 0.5, batch_size: int = 8) -> List[Dict[str, Any]]:
         """
-        Predict hate speech probability for a list of texts.
+        Predict hate speech probability for a list of texts using OpenAI.
         
         Args:
             texts: List of text strings to classify
             threshold: Probability threshold for classifying as hate speech
-            batch_size: Batch size for processing
+            batch_size: Batch size for processing (used for rate limiting)
             
         Returns:
             List of dictionaries with hate speech probabilities and classifications
         """
         results = []
-        self.model.eval()
         
-        # Process in batches
+        # Process in batches to avoid rate limits
         for i in range(0, len(texts), batch_size):
             batch_texts = texts[i:i+batch_size]
             
-            # Tokenize and prepare inputs
-            inputs = self.tokenizer(batch_texts, padding=True, truncation=True, 
-                                   return_tensors="pt", max_length=512)
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            
-            # Get predictions
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-            
-            # Extract probabilities
-            for j, prob in enumerate(probs):
-                hate_prob = prob[1].item()
-                results.append({
-                    "text": batch_texts[j],
-                    "hate_probability": hate_prob,
-                    "is_hate_speech": hate_prob > threshold
-                })
+            for text in batch_texts:
+                if not text.strip():
+                    # Skip empty texts
+                    results.append({
+                        "text": text,
+                        "hate_probability": 0.0,
+                        "is_hate_speech": False
+                    })
+                    continue
+                
+                try:
+                    # Create prompt for hate speech detection
+                    prompt = f"""
+                    Analyze the following text for hate speech. Hate speech is defined as content that promotes 
+                    violence against, threatens, or harasses individuals or groups based on attributes like race, 
+                    ethnicity, gender, religion, sexual orientation, or disability.
+                    
+                    Text to analyze: "{text}"
+                    
+                    Provide a score from 0.0 to 1.0 indicating the probability that this is hate speech, 
+                    where 0.0 means definitely not hate speech and 1.0 means definitely hate speech.
+                    
+                    Return only a JSON object with the following format:
+                    {{
+                        "hate_probability": [score between 0.0 and 1.0],
+                        "explanation": [brief explanation of your reasoning]
+                    }}
+                    """
+                    
+                    # Call OpenAI API
+                    response = openai.chat.completions.create(
+                        model=self.model_name,
+                        messages=[
+                            {"role": "system", "content": "You are an AI trained to detect hate speech."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.0,  # Use deterministic output
+                        response_format={"type": "json_object"}
+                    )
+                    
+                    # Parse response
+                    response_content = response.choices[0].message.content
+                    response_json = json.loads(response_content)
+                    
+                    hate_prob = float(response_json.get("hate_probability", 0.0))
+                    explanation = response_json.get("explanation", "No explanation provided")
+                    
+                    results.append({
+                        "text": text,
+                        "hate_probability": hate_prob,
+                        "is_hate_speech": hate_prob > threshold,
+                        "explanation": explanation
+                    })
+                    
+                except Exception as e:
+                    print(f"Error analyzing text: {e}")
+                    results.append({
+                        "text": text,
+                        "hate_probability": 0.0,
+                        "is_hate_speech": False,
+                        "error": str(e)
+                    })
+                
+                # Sleep to avoid rate limits
+                time.sleep(0.5)
         
         return results
 
@@ -152,7 +199,8 @@ def analyze_profile(
             hate_speech_count += 1
             hate_speech_posts.append({
                 **posts[i],
-                "hate_probability": result["hate_probability"]
+                "hate_probability": result["hate_probability"],
+                "explanation": result.get("explanation", "No explanation provided")
             })
     
     # Compile results
@@ -175,6 +223,7 @@ def main():
     parser.add_argument('--post-limit', type=int, default=50, help='Maximum posts to analyze per profile')
     parser.add_argument('--threshold', type=float, default=0.5, help='Hate speech probability threshold')
     parser.add_argument('--output', type=str, default='profile_analysis.json', help='Output JSON file')
+    parser.add_argument('--model', type=str, default='gpt-4o', help='OpenAI model to use')
     args = parser.parse_args()
     
     # Load handles
@@ -195,7 +244,7 @@ def main():
     client.login(USERNAME, PW)
     
     # Initialize hate speech detector
-    detector = HateSpeechDetector()
+    detector = HateSpeechDetector(model_name=args.model)
     
     # Analyze profiles
     results = []
