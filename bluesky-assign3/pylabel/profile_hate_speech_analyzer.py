@@ -4,13 +4,12 @@ import time
 import argparse
 import json
 import requests
-from io import BytesIO
-from PIL import Image
-import re
-from typing import List, Dict, Any, Tuple
+import base64
+from typing import List, Dict, Any
 import openai
 from atproto import Client
 from dotenv import load_dotenv
+from label import did_from_handle
 
 # Load credentials from .env
 load_dotenv(override=True)
@@ -40,7 +39,6 @@ class HateSpeechDetector:
                 return None
             
             # Convert to base64
-            import base64
             image_data = base64.b64encode(response.content).decode('utf-8')
             return image_data
         except Exception as e:
@@ -86,8 +84,8 @@ class HateSpeechDetector:
                     
                     # Create prompt for hate speech detection
                     prompt = f"""
-                    Analyze the following content for hate speech. Hate speech is defined as content that promotes 
-                    violence against, threatens, or harasses individuals or groups based on attributes like race, 
+                    Analyze the following content for hate speech. Hate speech is defined as content that expresses hate, encourages violence, 
+                    threatens, or harasses individuals or groups based on attributes like race, 
                     ethnicity, gender, religion, sexual orientation, or disability.
                     
                     Post text: "{text}"
@@ -169,13 +167,12 @@ class HateSpeechDetector:
         return results
 
 def fetch_profile_posts(client: Client, handle: str, limit: int = 100) -> List[Dict]:
-    """Fetch posts from a specific profile."""
+    """Fetch posts from a specific profile using the helper function."""
     print(f"Fetching up to {limit} posts from @{handle}...")
     
     try:
-        # Resolve handle to DID
-        resp = client.com.atproto.identity.resolve_handle({"handle": handle})
-        did = resp.did
+        # Use the helper function to resolve handle to DID
+        did = did_from_handle(handle)
         
         # Fetch author feed
         feed = client.app.bsky.feed.get_author_feed({"actor": did, "limit": limit})
