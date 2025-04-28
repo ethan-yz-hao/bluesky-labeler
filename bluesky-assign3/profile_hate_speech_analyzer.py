@@ -3,7 +3,11 @@ import os
 import time
 import argparse
 import json
-from typing import List, Dict, Any
+import requests
+from io import BytesIO
+from PIL import Image
+import re
+from typing import List, Dict, Any, Tuple
 import openai
 from atproto import Client
 from dotenv import load_dotenv
@@ -27,12 +31,28 @@ class HateSpeechDetector:
         if not OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
     
-    def predict(self, texts: List[str], threshold: float = 0.5, batch_size: int = 8) -> List[Dict[str, Any]]:
+    def _download_image_as_base64(self, image_url: str) -> str:
+        """Download an image and convert it to base64 for API submission."""
+        try:
+            response = requests.get(image_url, timeout=10)
+            if response.status_code != 200:
+                print(f"Failed to download image: {image_url}")
+                return None
+            
+            # Convert to base64
+            import base64
+            image_data = base64.b64encode(response.content).decode('utf-8')
+            return image_data
+        except Exception as e:
+            print(f"Error downloading image {image_url}: {e}")
+            return None
+    
+    def predict(self, posts: List[Dict], threshold: float = 0.5, batch_size: int = 8) -> List[Dict[str, Any]]:
         """
-        Predict hate speech probability for a list of texts using OpenAI.
+        Predict hate speech probability for a list of posts using OpenAI.
         
         Args:
-            texts: List of text strings to classify
+            posts: List of post dictionaries containing text and image_urls
             threshold: Probability threshold for classifying as hate speech
             batch_size: Batch size for processing (used for rate limiting)
             
@@ -42,12 +62,15 @@ class HateSpeechDetector:
         results = []
         
         # Process in batches to avoid rate limits
-        for i in range(0, len(texts), batch_size):
-            batch_texts = texts[i:i+batch_size]
+        for i in range(0, len(posts), batch_size):
+            batch_posts = posts[i:i+batch_size]
             
-            for text in batch_texts:
-                if not text.strip():
-                    # Skip empty texts
+            for post in batch_posts:
+                text = post.get("text", "")
+                image_urls = post.get("image_urls", [])
+                
+                if not text.strip() and not image_urls:
+                    # Skip empty posts
                     results.append({
                         "text": text,
                         "hate_probability": 0.0,
@@ -56,31 +79,61 @@ class HateSpeechDetector:
                     continue
                 
                 try:
+                    # Prepare messages for OpenAI
+                    messages = [
+                        {"role": "system", "content": "You are an AI trained to detect hate speech in text and images."}
+                    ]
+                    
                     # Create prompt for hate speech detection
                     prompt = f"""
-                    Analyze the following text for hate speech. Hate speech is defined as content that promotes 
+                    Analyze the following content for hate speech. Hate speech is defined as content that promotes 
                     violence against, threatens, or harasses individuals or groups based on attributes like race, 
                     ethnicity, gender, religion, sexual orientation, or disability.
                     
-                    Text to analyze: "{text}"
+                    Post text: "{text}"
+                    """
+                    
+                    # Add information about images if present
+                    if image_urls:
+                        prompt += "\n\nThis post also contains images which are provided for analysis."
+                    
+                    prompt += """
                     
                     Provide a score from 0.0 to 1.0 indicating the probability that this is hate speech, 
                     where 0.0 means definitely not hate speech and 1.0 means definitely hate speech.
                     
                     Return only a JSON object with the following format:
-                    {{
+                    {
                         "hate_probability": [score between 0.0 and 1.0],
                         "explanation": [brief explanation of your reasoning]
-                    }}
+                    }
                     """
+                    
+                    messages.append({"role": "user", "content": prompt})
+                    
+                    # Add images if present
+                    image_contents = []
+                    for img_url in image_urls:
+                        img_data = self._download_image_as_base64(img_url)
+                        if img_data:
+                            image_contents.append({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{img_data}"
+                                }
+                            })
+                    
+                    # If we have images, add them to the user message
+                    if image_contents:
+                        messages[-1]["content"] = [
+                            {"type": "text", "text": prompt},
+                            *image_contents
+                        ]
                     
                     # Call OpenAI API
                     response = openai.chat.completions.create(
                         model=self.model_name,
-                        messages=[
-                            {"role": "system", "content": "You are an AI trained to detect hate speech."},
-                            {"role": "user", "content": prompt}
-                        ],
+                        messages=messages,
                         temperature=0.0,  # Use deterministic output
                         response_format={"type": "json_object"}
                     )
@@ -94,15 +147,17 @@ class HateSpeechDetector:
                     
                     results.append({
                         "text": text,
+                        "image_count": len(image_urls),
                         "hate_probability": hate_prob,
                         "is_hate_speech": hate_prob > threshold,
                         "explanation": explanation
                     })
                     
                 except Exception as e:
-                    print(f"Error analyzing text: {e}")
+                    print(f"Error analyzing post: {e}")
                     results.append({
                         "text": text,
+                        "image_count": len(image_urls),
                         "hate_probability": 0.0,
                         "is_hate_speech": False,
                         "error": str(e)
@@ -130,6 +185,15 @@ def fetch_profile_posts(client: Client, handle: str, limit: int = 100) -> List[D
             post = item.post
             text = getattr(post.record, 'text', '')
             
+            # Extract image URLs
+            image_urls = []
+            if (hasattr(post, 'embed') and 
+                hasattr(post.embed, 'images')):
+                
+                for img in post.embed.images:
+                    if hasattr(img, 'fullsize'):
+                        image_urls.append(img.fullsize)
+            
             # Include external link if present
             if getattr(post, 'embed', None) and getattr(post.embed, 'external', None):
                 text += ' ' + post.embed.external.uri
@@ -139,6 +203,7 @@ def fetch_profile_posts(client: Client, handle: str, limit: int = 100) -> List[D
                 'cid': post.cid,
                 'author': post.author.handle,
                 'text': text,
+                'image_urls': image_urls,
                 'url': f"https://bsky.app/profile/{post.author.handle}/post/{post.uri.split('/')[-1]}"
             })
         
@@ -183,12 +248,9 @@ def analyze_profile(
             "error": "Failed to fetch posts"
         }
     
-    # Extract text for analysis
-    texts = [post["text"] for post in posts]
-    
-    # Analyze texts
-    print(f"Analyzing {len(texts)} posts for hate speech...")
-    results = detector.predict(texts, threshold=threshold)
+    # Analyze posts
+    print(f"Analyzing {len(posts)} posts for hate speech...")
+    results = detector.predict(posts, threshold=threshold)
     
     # Match results back to posts
     hate_speech_posts = []
