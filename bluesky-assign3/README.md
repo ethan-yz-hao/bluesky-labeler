@@ -44,65 +44,65 @@ Overall ratio of correct label assignments 1.0
 
 ## Part II: Hate Speech Detection
 
-For Part II, we implement a hate speech detection system that can identify profiles that frequently post harmful content. This implementation uses a pre-trained model from Hugging Face to analyze post content.
+For Part II, we've implemented a sophisticated hate speech detection system that can identify harmful content in Bluesky posts. The implementation uses a multi-stage approach combining lexicon-based filtering with advanced AI analysis.
+
+### Key Features
+
+-   **Multi-stage Detection Pipeline**: Uses HurtLex lexicon for initial screening followed by OpenAI's models for deeper content analysis
+-   **Multimodal Analysis**: Analyzes both text and images in posts for comprehensive detection
+-   **Detailed Explanations**: Provides reasoning behind classifications to improve transparency
+-   **Configurable Thresholds**: Adjustable sensitivity for different use cases
 
 ### Requirements
 
-To run the hate speech detection scripts, you'll need to install the following dependencies:
+To run the hate speech detection system, you'll need to install the following dependencies:
 
 ```bash
-pip install torch transformers atproto python-dotenv pandas
+pip install torch atproto python-dotenv pandas openai requests spacy
+python -m spacy download en_core_web_sm
 ```
 
-### Scripts
+### Configuration
 
-The implementation consists of two main scripts:
+The system requires the following environment variables in a `.env` file:
 
-1. **test_hate_speech_model.py**: A utility script to test the hate speech detection model locally.
-2. **profile_hate_speech_analyzer.py**: A script that analyzes Bluesky profiles for hate speech content.
-3. **policy_proposal_labeler.py**: The main implementation for Part II that labels profiles based on hate speech detection.
+```
+USERNAME=your_bluesky_username
+PW=your_bluesky_password
+OPENAI_API_KEY=your_openai_api_key
 
-### Testing the Hate Speech Model
+```
 
-You can test the hate speech detection model with sample texts or your own data:
+### Usage
+
+You can analyze individual posts for hate speech content:
 
 ```bash
-# Test with built-in sample texts
-python test_hate_speech_model.py --sample-text
-
-# Test with a JSON file containing posts
-python test_hate_speech_model.py --input posts.json --text-field text
-
-# Test with a CSV file
-python test_hate_speech_model.py --input posts.csv --text-field text
+python -m pylabel.policy_proposal_labeler --url https://bsky.app/profile/user.bsky.social/post/postid --threshold 0.5 --model gpt-4o
 ```
 
-### Analyzing Bluesky Profiles
-
-To analyze a Bluesky profile for hate speech content, run:
+Or test the system on a dataset of posts:
 
 ```bash
-# Analyze specific handles
-python profile_hate_speech_analyzer.py --handles user1.bsky.social user2.bsky.social
-
-# Analyze handles from a file
-python profile_hate_speech_analyzer.py --handles-file handles.txt
-
-# Customize analysis parameters
-python profile_hate_speech_analyzer.py --handles user.bsky.social --post-limit 100 --threshold 0.7
+python test_policy_proposal_labeler.py test-data/bluesky_hate_speech_sample.csv results.csv --model gpt-4o --threshold 0.5
 ```
 
-### Model Information
+### How It Works
 
-The hate speech detection system uses the [dehatebert-mono-english](https://huggingface.co/Hate-speech-CNERG/dehatebert-mono-english) model from Hugging Face, which is fine-tuned for detecting hate speech in English text.
+1. **Lexicon-Based Filtering**: Uses HurtLex, a multilingual hate speech lexicon, to perform initial screening
+2. **NLP Processing**: Applies spaCy for text normalization and lemmatization
+3. **Category-Weighted Analysis**: Assigns different weights to hate speech categories based on severity
+4. **AI-Powered Analysis**: For complex cases, uses OpenAI's models to analyze context and nuance
+5. **Image Analysis**: Processes images in posts to detect visual hate speech content
 
 ### Output Format
 
-The profile analyzer outputs a JSON file with detailed analysis results, including:
+The system produces detailed analysis results including:
 
--   Number of posts analyzed per profile
--   Count and ratio of hate speech posts
--   Detailed information about posts classified as hate speech
--   Overall summary statistics
+-   Hate speech probability score (0.0-1.0)
+-   Binary classification (hate speech or not)
+-   Explanation of the classification decision
+-   Detection method used (hurtlex, openai, or combined)
+-   Matched hate speech terms and categories (if any)
 
-This data can be used to identify profiles that frequently post harmful content and may require moderation.
+This implementation provides a robust foundation for content moderation on social platforms, balancing efficiency with accuracy through its multi-stage approach.

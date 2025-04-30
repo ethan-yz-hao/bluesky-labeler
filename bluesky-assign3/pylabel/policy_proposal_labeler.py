@@ -9,7 +9,6 @@ from typing import Dict, Any
 import openai
 from atproto import Client
 from dotenv import load_dotenv
-from label import did_from_handle, label_post, post_from_url
 import sys
 
 # Load credentials from .env
@@ -20,6 +19,32 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Configure OpenAI
 openai.api_key = OPENAI_API_KEY
+
+def did_from_handle(handle: str):
+    """
+    Resolve the DID associated with a handle.
+
+    Args:
+        handle (str): The handle to resolve.
+
+    Returns:
+        str: The DID associated with the input handle.
+    """
+    # via: https://github.com/skygaze-ai/atproto-101
+    return requests.get(
+        "https://bsky.social/xrpc/com.atproto.identity.resolveHandle",
+        params={"handle": handle},
+        timeout=10,
+    ).json()["did"]
+
+def post_from_url(client: Client, url: str):
+    """
+    Retrieve a Bluesky post from its URL
+    """
+    parts = url.split("/")
+    rkey = parts[-1]
+    handle = parts[-3]
+    return client.get_post(rkey, handle)
 
 class HateSpeechDetector:
     def __init__(self, model_name: str = "gpt-4o", hurtlex_threshold: float = 0.05):
@@ -389,62 +414,6 @@ def extract_post_data(client: Client, url: str) -> Dict:
         print(f"Error fetching post from URL {url}: {e}")
         return None
 
-def label_hate_speech_post(client: Client, post_result: Dict, label_value: str = "hate-speech") -> Dict:
-    """
-    Apply a label to a post identified as hate speech.
-    
-    Args:
-        client: ATProto client
-        post_result: Post analysis result
-        label_value: Label to apply to hate speech post
-        
-    Returns:
-        Dictionary with labeling result
-    """
-    if not post_result.get("is_hate_speech", False):
-        return {
-            "post_url": post_result.get("post_url", ""),
-            "hate_probability": post_result.get("hate_probability", 0.0),
-            "explanation": post_result.get("explanation", ""),
-            "labeling_success": False,
-            "error": "Post not classified as hate speech"
-        }
-    
-    post_url = post_result.get("post_url")
-    if not post_url:
-        return {
-            "hate_probability": post_result.get("hate_probability", 0.0),
-            "explanation": post_result.get("explanation", ""),
-            "labeling_success": False,
-            "error": "No post URL provided"
-        }
-    
-    try:
-        # Create a labeler client
-        did = did_from_handle(USERNAME)
-        labeler_client = client.with_proxy("atproto_labeler", did)
-        
-        # Apply label to post
-        result = label_post(client, labeler_client, post_url, [label_value])
-        
-        return {
-            "post_url": post_url,
-            "hate_probability": post_result.get("hate_probability", 0.0),
-            "explanation": post_result.get("explanation", ""),
-            "labeling_success": True,
-            "label_applied": label_value
-        }
-        
-    except Exception as e:
-        print(f"Error labeling post {post_url}: {e}")
-        return {
-            "post_url": post_url,
-            "hate_probability": post_result.get("hate_probability", 0.0),
-            "explanation": post_result.get("explanation", ""),
-            "labeling_success": False,
-            "error": str(e)
-        }
-
 def main():
     parser = argparse.ArgumentParser(description='Analyze and label hate speech in a Bluesky post')
     parser.add_argument('--url', type=str, required=True, help='URL of the Bluesky post to analyze')
@@ -487,22 +456,10 @@ def main():
     print(f"Explanation: {result.get('explanation', 'No explanation provided')}")
     print("-" * 80)
     
-    # Apply label if requested and post is classified as hate speech
-    labeling_result = None
-    if not args.no_label and result.get("is_hate_speech", False):
-        print(f"\nApplying '{args.label}' label to post...")
-        labeling_result = label_hate_speech_post(client, result, label_value=args.label)
-        
-        if labeling_result.get("labeling_success", False):
-            print(f"Successfully applied '{args.label}' label to post")
-        else:
-            print(f"Failed to apply label: {labeling_result.get('error', 'Unknown error')}")
-    
     # Save results
     output_data = {
         "post_url": args.url,
         "analysis": result,
-        "labeling_result": labeling_result if not args.no_label and result.get("is_hate_speech", False) else None
     }
     
     with open(args.output, 'w', encoding='utf-8') as f:
