@@ -286,9 +286,13 @@ class HateSpeechDetector:
             
             # Create prompt for hate speech detection
             prompt = f"""
-            Analyze the following content for hate speech. Hate speech is defined as content that expresses hate, encourages violence, 
-            threatens, or harasses individuals or groups based on attributes like race, 
-            ethnicity, gender, religion, sexual orientation, or disability.
+            Analyze the following content for hate speech. Hate speech is defined as content that attacks, threatens, 
+            or harasses individuals or groups, regardless of the basis for the attack. This includes any content that:
+            - Expresses hatred toward any individual or group
+            - Encourages violence or harm against others
+            - Contains threatening language
+            - Harasses or bullies specific people or communities
+            - Uses dehumanizing language about any person or group
             
             Post text: "{text}"
             """
