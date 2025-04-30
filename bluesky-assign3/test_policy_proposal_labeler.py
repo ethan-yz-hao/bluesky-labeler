@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 import pandas as pd
 from atproto import Client
 from dotenv import load_dotenv
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
 
 from pylabel.policy_proposal_labeler import HateSpeechDetector, extract_post_data
 
@@ -39,6 +40,10 @@ def main():
     
     # Prepare results list
     results: List[Dict[str, Any]] = []
+    
+    # Lists to store true and predicted labels for metrics calculation
+    y_true = []
+    y_pred = []
     
     num_correct = 0
     total = urls_df.shape[0]
@@ -86,6 +91,10 @@ def main():
             "explanation": result.get("explanation", "No explanation provided"),
             "method": result.get("method", "unknown")
         })
+        
+        # Store labels for metrics calculation
+        y_true.append(1 if expected_label == "Hate Speech" else 0)
+        y_pred.append(1 if predicted_label == "Hate Speech" else 0)
     
     # Write results to CSV
     with open(args.output_csv, 'w', newline='', encoding='utf-8') as f:
@@ -96,9 +105,38 @@ def main():
         for result in results:
             writer.writerow(result)
     
+    # Calculate metrics
+    accuracy = num_correct / total if total > 0 else 0
+    
+    # Calculate confusion matrix
+    if len(y_true) > 0 and len(y_pred) > 0:
+        cm = confusion_matrix(y_true, y_pred)
+        tn, fp, fn, tp = cm.ravel() if cm.size == 4 else (0, 0, 0, 0)
+        
+        # Calculate precision, recall, and F1 score
+        precision = precision_score(y_true, y_pred) if sum(y_pred) > 0 else 0
+        recall = recall_score(y_true, y_pred) if sum(y_true) > 0 else 0
+        f1 = f1_score(y_true, y_pred) if (precision + recall) > 0 else 0
+        
+        # Print confusion matrix
+        print("\nConfusion Matrix:")
+        print("                  Predicted   Predicted")
+        print("                  Not Hate    Hate")
+        print(f"Actual Not Hate    {tn}          {fp}")
+        print(f"Actual Hate         {fn}          {tp}")
+        
+        # Print metrics
+        print("\nPerformance Metrics:")
+        print(f"Accuracy:  {accuracy:.4f}")
+        print(f"Precision: {precision:.4f}")
+        print(f"Recall:    {recall:.4f}")
+        print(f"F1 Score:  {f1:.4f}")
+    else:
+        print("\nNot enough data to calculate metrics")
+    
     # Print summary
-    print(f"The detector produced {num_correct} correct label assignments out of {total}")
-    print(f"Overall accuracy: {num_correct/total:.4f}")
+    print(f"\nThe detector produced {num_correct} correct label assignments out of {total}")
+    print(f"Overall accuracy: {accuracy:.4f}")
     print(f"Results saved to {args.output_csv}")
 
 
