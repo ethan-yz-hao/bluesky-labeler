@@ -17,7 +17,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_csv", type=str, help="Path to CSV file with labeled posts (labeled_money_posts.csv)")
     parser.add_argument("output_csv", type=str, help="Path to output CSV file for results")
+    parser.add_argument("errors_csv", type=str, help="Path to output CSV file for incorrectly labeled posts")
     parser.add_argument("--threshold", type=float, default=0.2, help="Job scam probability threshold")
+ 
     args = parser.parse_args()
 
     # Initialize job scam detector
@@ -32,6 +34,9 @@ def main():
     # Lists to store true and predicted labels for metrics calculation
     y_true = []
     y_pred = []
+    
+    # Lists to store incorrectly labeled posts for debugging
+    incorrect_predictions = []
     
     num_correct = 0
     total = posts_df.shape[0]
@@ -67,6 +72,19 @@ def main():
         else:
             print(f"For post {post_id}, detector produced '{predicted_label}', expected '{expected_label}'")
             print(f"Text: {text[:100]}...")
+            # Add to incorrect predictions list
+            incorrect_predictions.append({
+                "post_id": post_id,
+                "text": text,
+                "creator": creator,
+                "expected_label": expected_label,
+                "predicted_label": predicted_label,
+                "scam_probability": result.get("scam_probability", 0.0),
+                "explanation": result.get("explanation", "No explanation provided"),
+                "method": result.get("method", "unknown"),
+                "confidence": row.get("confidence", 0),
+                "url": f"https://bsky.app/profile/{creator}/post/{post_id}"
+            })
         
         # Add to results
         results.append({
@@ -94,6 +112,17 @@ def main():
         writer.writeheader()
         for result in results:
             writer.writerow(result)
+    
+    # Write incorrect predictions to a separate CSV if specified
+    if args.errors_csv and incorrect_predictions:
+        with open(args.errors_csv, 'w', newline='', encoding='utf-8') as f:
+            fieldnames = ["post_id", "text", "creator", "expected_label", "predicted_label", 
+                         "scam_probability", "explanation", "method", "confidence", "url"]
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for result in incorrect_predictions:
+                writer.writerow(result)
+        print(f"Saved {len(incorrect_predictions)} incorrectly labeled posts to {args.errors_csv}")
     
     # Calculate metrics
     accuracy = num_correct / total if total > 0 else 0
