@@ -12,12 +12,6 @@ load_dotenv(override=True)
 USERNAME = os.getenv("USERNAME")
 PW = os.getenv("PW")
 
-GENERAL_JOB_KEYWORDS = [
-    "hiring", "job opening", "career opportunity", "join our team",
-    "we are recruiting", "software engineer role", "remote developer",
-    "internship", "graduate program", "talent acquisition",
-]
-
 SCAM_PATTERNS = {
     # A. pay-to-earn / social-task grifts
     "social_tasks": [
@@ -30,10 +24,10 @@ SCAM_PATTERNS = {
         r"get paid to (retweet|like|share)",
         # new …
         r"(like|click ads|surveys|data entry)\s*\w*\s*(get paid|earn|\$\d+)",
-        r"work\s+\d+\s*hours?.*?\b(day|home)\b",          # "work 2 hours a day / work 3 hours home"
+        r"work\s+\d+\s*hours?.*?\b(day|home)\b",          # “work 2 hours a day / work 3 hours home”
     ],
 
-    # B. zero-barrier promises & "too-good-to-be-true" hooks
+    # B. zero-barrier promises & “too-good-to-be-true” hooks
     "no_barrier": [
         # original …
         r"no experience (needed|required)",
@@ -111,17 +105,12 @@ def _matched_patterns(text: str):
 
 
 def is_scam_by_regex(text: str) -> bool:
-    """True if text matches *any* scam pattern."""
-    tl = text.lower()
-    for bucket in SCAM_PATTERNS.values():
-        for pattern in bucket:
-            if re.search(pattern, tl, flags=re.IGNORECASE):
-                return True
-    return False
-
-def keyword_gate(text: str, kw: str) -> bool:
-    """Case-insensitive substring match for broad search."""
-    return kw.lower() in text.lower()
+    """
+    True  → at least one *non-hashtag* pattern matched  
+    False → either nothing matched or only hashtags matched
+    """
+    has_other, _, _ = _matched_patterns(text)
+    return has_other
 
 def post_from_url(client: Client, url: str):
     """
@@ -186,7 +175,7 @@ class PolicyProposalLabeler:
             threshold: Not used in this implementation but kept for API consistency
             
         Returns:
-            Dictionary with classification
+            Dictionary with scam probability and classification
         """
         text = post.get("text", "")
         
@@ -194,45 +183,29 @@ class PolicyProposalLabeler:
             # Skip empty posts
             return {
                 "text": text,
+                "scam_probability": 0.0,
                 "is_job_scam": False,
                 "explanation": "Empty post",
                 "method": "empty_check"
             }
         
         try:
-            # Check if text contains job-related keywords
-            is_job_related = any(kw.lower() in text.lower() for kw in GENERAL_JOB_KEYWORDS)
             
-            # Check for scam patterns - using the simplified logic
+            # Check for scam patterns
             money_bait = is_scam_by_regex(text)
-            has_cta = CTA_REGEX.search(text) is not None
+            has_cta    = CTA_REGEX.search(text) is not None
             
-            # Determine which patterns matched for explanation
-            matched_patterns = []
-            for category, patterns in SCAM_PATTERNS.items():
-                for pattern in patterns:
-                    if re.search(pattern, text, flags=re.IGNORECASE):
-                        matched_patterns.append(f"{category}: {pattern}")
-            
-            # Simple classification based on money_bait
-            is_job_scam = money_bait
-            
-            # Generate explanation
-            explanation = []
+            isScam = False
+
             if money_bait:
-                explanation.append("Contains suspicious earnings claims")
-            if has_cta:
-                explanation.append("Contains call-to-action phrases")
-            if matched_patterns:
-                explanation.append(f"Matched patterns: {', '.join(matched_patterns[:3])}")
-            if not explanation:
-                explanation.append("No suspicious patterns detected")
+                isScam = True
+
+
             
             return {
                 "text": text,
                 "image_count": len(post.get("image_urls", [])),
-                "is_job_scam": is_job_scam,
-                "explanation": ". ".join(explanation),
+                "is_job_scam": isScam,
                 "post_url": post.get("url", ""),
                 "uri": post.get("uri", ""),
                 "method": "regex_patterns"
@@ -243,6 +216,7 @@ class PolicyProposalLabeler:
             return {
                 "text": text,
                 "image_count": len(post.get("image_urls", [])),
+                "scam_probability": 0.0,
                 "is_job_scam": False,
                 "error": str(e),
                 "post_url": post.get("url", ""),
@@ -284,6 +258,7 @@ def main():
     print("\nAnalysis Results:")
     print("-" * 80)
     print(f"Detection Method: {result.get('method', 'unknown')}")
+    print(f"Job Scam Probability: {result['scam_probability']:.4f}")
     print(f"Classification: {'JOB SCAM' if result['is_job_scam'] else 'NOT A JOB SCAM'}")
     print(f"Explanation: {result.get('explanation', 'No explanation provided')}")
     print("-" * 80)
