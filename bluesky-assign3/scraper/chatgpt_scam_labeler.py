@@ -40,8 +40,6 @@ def classify_post(post):
             Analyze the following social media post and determine if it's a money-making scam that promises easy income with minimal effort.
             
             POST: {post['text']}
-            HASHTAG: #{post['hashtag']}
-            SEARCH QUERY: {post.get('search_query', 'N/A')}
             
             Focus SPECIFICALLY on identifying posts that claim people can make money easily with minimal effort or time investment.
             Common signs include:
@@ -56,6 +54,8 @@ def classify_post(post):
             - NSFW content or adult services
             - General spam that doesn't specifically promise easy money
             - Cryptocurrency discussions that don't promise easy earnings
+            - Legitimate marketplaces or platforms where people sell goods or services
+            - Posts that merely mention money or profit without promising easy/quick wealth
             
             Classify as either "scam" or "not_scam" and provide a brief explanation.
             Return your answer in JSON format:
@@ -66,7 +66,7 @@ def classify_post(post):
             response = client.chat.completions.create(
                 model="gpt-4o",  # or "gpt-3.5-turbo" for a cheaper option
                 messages=[
-                    {"role": "system", "content": "You are an expert at identifying money-making scams that promise easy income with minimal effort. Only classify posts as scams if they explicitly promise easy money."},
+                    {"role": "system", "content": "You are an expert at identifying money-making scams that promise easy income with minimal effort. Only classify posts as scams if they explicitly promise easy money with minimal effort. Be careful not to misclassify adult content, marketplaces, or legitimate selling platforms as scams."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,  # Low temperature for more consistent results
