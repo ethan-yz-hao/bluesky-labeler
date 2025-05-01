@@ -195,11 +195,8 @@ class PolicyProposalLabeler:
             
             isScam = "not_scam"
 
-            if has_other:
-                isScam = "scam"
-
-            if has_hash:
-                isScam = "likely scam"
+            if has_other or has_hash:
+                isScam = "likely_scam"
 
 
             
