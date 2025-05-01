@@ -1,0 +1,163 @@
+(.venv) PS C:\Users\ASUS\Documents\Project\bluesky-labeler\bluesky-assign3> python .\scraper\bluesky_hashtag_scraper.py
+
+🔎 Collecting posts with #earnmoney...
+  - Direct search: 173 posts
+  - '#earnmoney payment' search: 0 posts
+  - '#earnmoney income' search: 27 posts
+  - '#earnmoney opportunity' search: 10 posts
+  - Text search: 27 posts
+✅ Collected 175 posts with #earnmoney
+
+🔎 Collecting posts with #makemoney...
+  - Direct search: 200 posts
+✅ Collected 200 posts with #makemoney
+
+🔎 Collecting posts with #earnfromhome...
+  - Direct search: 51 posts
+  - '#earnfromhome online' search: 14 posts
+  - '#earnfromhome income' search: 7 posts
+  - '#earnfromhome opportunity' search: 2 posts
+  - Text search: 53 posts
+✅ Collected 53 posts with #earnfromhome
+
+🔎 Collecting posts with #quickcash...
+  - Direct search: 26 posts
+  - '#quickcash cash' search: 15 posts
+  - '#quickcash business' search: 0 posts
+  - '#quickcash online' search: 1 posts
+  - Text search: 29 posts
+✅ Collected 29 posts with #quickcash
+
+🔎 Collecting posts with #easymoney...
+  - Direct search: 129 posts
+  - '#easymoney online' search: 4 posts
+  - '#easymoney business' search: 1 posts
+  - '#easymoney income' search: 4 posts
+  - Text search: 71 posts
+✅ Collected 132 posts with #easymoney
+
+🔎 Collecting posts with #fastcash...
+  - Direct search: 19 posts
+  - '#fastcash work' search: 0 posts
+  - '#fastcash job' search: 0 posts
+  - '#fastcash payment' search: 2 posts
+  - Text search: 35 posts
+✅ Collected 35 posts with #fastcash
+
+🔎 Collecting posts with #getpaid...
+  - Direct search: 51 posts
+  - '#getpaid opportunity' search: 0 posts
+  - '#getpaid earn' search: 3 posts
+  - '#getpaid cash' search: 3 posts
+  - Text search: 82 posts
+✅ Collected 82 posts with #getpaid
+
+🔎 Collecting posts with #paidinstantly...
+  - Direct search: 0 posts
+  - '#paidinstantly online' search: 0 posts
+  - '#paidinstantly work' search: 0 posts
+  - '#paidinstantly cash' search: 0 posts
+  - Text search: 0 posts
+✅ Collected 0 posts with #paidinstantly
+
+🔎 Collecting posts with #passiveincome...
+  - Direct search: 200 posts
+✅ Collected 200 posts with #passiveincome
+
+🔎 Collecting posts with #reviewandearn...
+  - Direct search: 1 posts
+  - '#reviewandearn online' search: 0 posts
+  - '#reviewandearn payment' search: 0 posts
+  - '#reviewandearn money' search: 0 posts
+  - Text search: 1 posts
+✅ Collected 1 posts with #reviewandearn
+
+🔎 Collecting posts with #likeandgetpaid...
+  - Direct search: 0 posts
+  - '#likeandgetpaid work' search: 0 posts
+  - '#likeandgetpaid job' search: 0 posts
+  - '#likeandgetpaid cash' search: 0 posts
+  - Text search: 0 posts
+✅ Collected 0 posts with #likeandgetpaid
+
+🔎 Collecting posts with #payperlike...
+  - Direct search: 0 posts
+  - '#payperlike income' search: 0 posts
+  - '#payperlike online' search: 0 posts
+  - '#payperlike earn' search: 0 posts
+  - Text search: 0 posts
+✅ Collected 0 posts with #payperlike
+
+🔎 Collecting posts with #clicktask...
+  - Direct search: 0 posts
+  - '#clicktask money' search: 0 posts
+  - '#clicktask job' search: 0 posts
+  - '#clicktask cash' search: 0 posts
+  - Text search: 0 posts
+✅ Collected 0 posts with #clicktask
+
+🔎 Collecting posts with #paysurvey...
+  - Direct search: 0 posts
+  - '#paysurvey work' search: 0 posts
+  - '#paysurvey income' search: 0 posts
+  - '#paysurvey earn' search: 0 posts
+  - Text search: 0 posts
+✅ Collected 0 posts with #paysurvey
+
+🔎 Collecting posts with #dmforinfo...
+  - Direct search: 3 posts
+  - '#dmforinfo payment' search: 0 posts
+  - '#dmforinfo opportunity' search: 0 posts
+  - '#dmforinfo work' search: 0 posts
+  - Text search: 3 posts
+✅ Collected 3 posts with #dmforinfo
+
+🔎 Collecting posts with #linkinbio...
+  - Direct search: 200 posts
+✅ Collected 200 posts with #linkinbio
+
+🔎 Collecting posts with #telegramlink...
+  - Direct search: 39 posts
+  - '#telegramlink business' search: 0 posts
+  - '#telegramlink cash' search: 0 posts
+  - '#telegramlink job' search: 0 posts
+  - Text search: 39 posts
+✅ Collected 39 posts with #telegramlink
+
+🔎 Collecting posts with #whatsappme...
+  - Direct search: 0 posts
+  - '#whatsappme money' search: 0 posts
+  - '#whatsappme work' search: 0 posts
+  - '#whatsappme opportunity' search: 0 posts
+  - Text search: 0 posts
+✅ Collected 0 posts with #whatsappme
+
+🔎 Collecting posts with #100aday...
+  - Direct search: 0 posts
+  - '#100aday income' search: 0 posts
+  - '#100aday payment' search: 0 posts
+  - '#100aday job' search: 0 posts
+  - Text search: 0 posts
+✅ Collected 0 posts with #100aday
+
+🔎 Collecting posts with #500aweek...
+  - Direct search: 0 posts
+  - '#500aweek money' search: 0 posts
+  - '#500aweek payment' search: 0 posts
+  - '#500aweek job' search: 0 posts
+  - Text search: 0 posts
+✅ Collected 0 posts with #500aweek
+
+🔎 Collecting posts with #5kmonth...
+  - Direct search: 0 posts
+  - '#5kmonth work' search: 0 posts
+  - '#5kmonth job' search: 0 posts
+  - '#5kmonth income' search: 0 posts
+  - Text search: 1 posts
+✅ Collected 1 posts with #5kmonth
+
+🔍 Removing duplicate posts...
+✅ Removed 207 duplicate posts
+
+📄 Collected 943 unique posts from 1150 total posts
+📄 Data saved to bluesky_money_posts.csv and bluesky_money_posts.json

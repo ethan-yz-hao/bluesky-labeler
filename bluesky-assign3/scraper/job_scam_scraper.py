@@ -4,10 +4,10 @@ from atproto import Client
 
 load_dotenv()
 USERNAME = os.getenv("USERNAME")
-PASSWORD = os.getenv("PASSWORD")
+PW = os.getenv("PW")
 
 client = Client()
-client.login(USERNAME, PASSWORD)
+client.login(USERNAME, PW)
 
 GENERAL_JOB_KEYWORDS = [
     "hiring", "job opening", "career opportunity", "join our team",
