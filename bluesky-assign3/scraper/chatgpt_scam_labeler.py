@@ -57,6 +57,8 @@ def classify_post(post):
             - Legitimate marketplaces or platforms where people sell goods or services
             - Posts that merely mention money or profit without promising easy/quick wealth
             
+            Don't rely on hashtags - analyze the full context of the post. The post should explicitly redirect people to go and do a job to get quick money to be classified as a scam.
+            
             Classify as either "scam" or "not_scam" and provide a brief explanation.
             Return your answer in JSON format:
             {{"classification": "scam" or "not_scam", "confidence": 0-100, "explanation": "your reasoning"}}
