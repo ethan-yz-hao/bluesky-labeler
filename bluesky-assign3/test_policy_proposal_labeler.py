@@ -62,7 +62,7 @@ def main():
         result = detector.predict(post_data)
         
         # Determine predicted label (convert to match the format in the CSV)
-        predicted_label = "scam" if result.get("is_job_scam", False) else "not_scam"
+        predicted_label = result.get("is_job_scam")
         
         # Check if prediction matches expected label
         is_correct = predicted_label == expected_label

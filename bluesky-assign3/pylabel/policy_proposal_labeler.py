@@ -94,23 +94,21 @@ def _matched_patterns(text: str):
                 has_other = True
                 matches.append(f"{bucket}: {pat}")
 
-    # Pass 2: only *now* do we bother with the hashtag bucket --
-    if has_other:
-        for pat in SCAM_PATTERNS["hashtags"]:
-            if re.search(pat, tl, re.IGNORECASE):
-                has_hash = True
-                matches.append(f"hashtags: {pat}")
+    for pat in SCAM_PATTERNS["hashtags"]:
+        if re.search(pat, tl, re.IGNORECASE):
+            has_hash = True
+            matches.append(f"hashtags: {pat}")
 
     return has_other, has_hash, matches
 
 
-def is_scam_by_regex(text: str) -> bool:
+def is_scam_by_regex(text: str):
     """
     True  → at least one *non-hashtag* pattern matched  
     False → either nothing matched or only hashtags matched
     """
-    has_other, _, _ = _matched_patterns(text)
-    return has_other
+    has_other, has_hash, _ = _matched_patterns(text)
+    return has_other, has_hash
 
 def post_from_url(client: Client, url: str):
     """
@@ -192,13 +190,16 @@ class PolicyProposalLabeler:
         try:
             
             # Check for scam patterns
-            money_bait = is_scam_by_regex(text)
+            has_other, has_hash = is_scam_by_regex(text)
             has_cta    = CTA_REGEX.search(text) is not None
             
-            isScam = False
+            isScam = "not_scam"
 
-            if money_bait:
-                isScam = True
+            if has_other:
+                isScam = "scam"
+
+            if has_hash:
+                isScam = "likely scam"
 
 
             
@@ -217,7 +218,7 @@ class PolicyProposalLabeler:
                 "text": text,
                 "image_count": len(post.get("image_urls", [])),
                 "scam_probability": 0.0,
-                "is_job_scam": False,
+                "is_job_scam": "",
                 "error": str(e),
                 "post_url": post.get("url", ""),
                 "uri": post.get("uri", ""),
