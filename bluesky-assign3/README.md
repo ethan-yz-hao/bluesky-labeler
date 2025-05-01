@@ -42,24 +42,23 @@ The labeler produced 20 correct labels assignments out of 20
 Overall ratio of correct label assignments 1.0
 ```
 
-## Part II: Hate Speech Detection
+## Part II: Job Scam Detection
 
-For Part II, we've implemented a sophisticated hate speech detection system that can identify harmful content in Bluesky posts. The implementation uses a multi-stage approach combining lexicon-based filtering with advanced AI analysis.
+For Part II, we've implemented a job scam detection system that can identify fraudulent money-making schemes and employment scams on Bluesky. The implementation uses pattern recognition and heuristic analysis to flag suspicious content.
 
 ### Key Features
 
--   **Multi-stage Detection Pipeline**: Uses HurtLex lexicon for initial screening followed by OpenAI's models for deeper content analysis
--   **Multimodal Analysis**: Analyzes both text and images in posts for comprehensive detection
--   **Detailed Explanations**: Provides reasoning behind classifications to improve transparency
--   **Configurable Thresholds**: Adjustable sensitivity for different use cases
+-   **Pattern-Based Detection**: Uses regex patterns to identify common job scam indicators
+-   **Multi-factor Analysis**: Considers earnings claims, barrier-to-entry promises, and suspicious calls-to-action
+-   **Transparent Explanations**: Provides reasoning behind classifications for better understanding
+-   **Configurable Threshold**: Adjustable sensitivity to balance precision and recall
 
 ### Requirements
 
-To run the hate speech detection system, you'll need to install the following dependencies:
+To run the job scam detection system, you'll need to install the following dependencies:
 
 ```bash
-pip install torch atproto python-dotenv pandas openai requests spacy
-python -m spacy download en_core_web_sm
+pip install atproto python-dotenv pandas scikit-learn
 ```
 
 ### Configuration
@@ -67,42 +66,51 @@ python -m spacy download en_core_web_sm
 The system requires the following environment variables in a `.env` file:
 
 ```
-USERNAME=your_bluesky_username
-PW=your_bluesky_password
-OPENAI_API_KEY=your_openai_api_key
-
+USERNAME=your_username
+PW=your_password
 ```
 
 ### Usage
 
-You can analyze individual posts for hate speech content:
+You can analyze individual posts for job scam content:
 
 ```bash
-python -m pylabel.policy_proposal_labeler --url https://bsky.app/profile/user.bsky.social/post/postid --threshold 0.5 --model gpt-4o
+python -m pylabel.policy_proposal_labeler --url https://bsky.app/profile/user.bsky.social/post/postid --threshold 0.5
 ```
 
 Or test the system on a dataset of posts:
 
 ```bash
-python test_policy_proposal_labeler.py test-data/bluesky_hate_speech_sample.csv results.csv --model gpt-4o --threshold 0.5
+python test_policy_proposal_labeler.py labeled_money_posts.csv results.csv --threshold 0.5
 ```
 
 ### How It Works
 
-1. **Lexicon-Based Filtering**: Uses HurtLex, a multilingual hate speech lexicon, to perform initial screening
-2. **NLP Processing**: Applies spaCy for text normalization and lemmatization
-3. **Category-Weighted Analysis**: Assigns different weights to hate speech categories based on severity
-4. **AI-Powered Analysis**: For complex cases, uses OpenAI's models to analyze context and nuance
-5. **Image Analysis**: Processes images in posts to detect visual hate speech content
+1. **Keyword Matching**: Identifies job-related content using common employment terminology
+2. **Scam Pattern Detection**: Applies regex patterns to detect:
+    - Unrealistic earnings claims ("earn $500/day")
+    - Zero-barrier promises ("no experience needed")
+    - External platform funneling (Telegram/WhatsApp links)
+3. **Call-to-Action Analysis**: Identifies suspicious CTAs that pressure users to take immediate action
+4. **Probability Scoring**: Combines multiple signals to generate a scam probability score
+5. **Threshold-Based Classification**: Uses configurable threshold to make final determination
+
+### Data Collection
+
+The test dataset was created using:
+
+-   A custom Bluesky hashtag scraper targeting money-making related tags
+-   Manual labeling supplemented by GPT-4 analysis for ground truth
+-   Diverse post collection across multiple hashtags and content types
 
 ### Output Format
 
 The system produces detailed analysis results including:
 
--   Hate speech probability score (0.0-1.0)
--   Binary classification (hate speech or not)
+-   Job scam probability score (0.0-1.0)
+-   Binary classification (scam or not)
 -   Explanation of the classification decision
--   Detection method used (hurtlex, openai, or combined)
--   Matched hate speech terms and categories (if any)
+-   Detection method used
+-   Matched scam patterns (if any)
 
-This implementation provides a robust foundation for content moderation on social platforms, balancing efficiency with accuracy through its multi-stage approach.
+This implementation provides an effective tool for identifying potentially harmful job scams on social platforms, helping protect users from financial fraud and exploitation.
