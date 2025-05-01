@@ -37,7 +37,7 @@ def classify_post(post):
         try:
             # Create prompt for ChatGPT
             prompt = f"""
-            Analyze the following social media post and determine if it's a money-making scam that promises easy income with minimal effort.
+            Analyze the following social media post and determine if it's a potential money-making scam that promises easy income with minimal effort.
             
             POST: {post['text']}
             
@@ -49,7 +49,7 @@ def classify_post(post):
             - Requests to contact via external messaging apps (WhatsApp, Telegram) for money-making opportunities
             - Unrealistic income claims
             
-            DO NOT classify as scams:
+            DO NOT classify as potential scams:
             - Regular job postings (even if suspicious)
             - NSFW content or adult services
             - General spam that doesn't specifically promise easy money
@@ -59,9 +59,9 @@ def classify_post(post):
             
             Don't rely on hashtags - analyze the full context of the post. The post should explicitly redirect people to go and do a job to get quick money to be classified as a scam.
             
-            Classify as either "scam" or "not_scam" and provide a brief explanation.
+            Classify as either "potential_scam" or "not_scam" and provide a brief explanation.
             Return your answer in JSON format:
-            {{"classification": "scam" or "not_scam", "confidence": 0-100, "explanation": "your reasoning"}}
+            {{"classification": "potential_scam" or "not_scam", "confidence": 0-100, "explanation": "your reasoning"}}
             """
             
             # Call ChatGPT API
@@ -179,13 +179,13 @@ def main():
     df.to_csv(OUTPUT_FILE, index=False)
     
     # Print statistics
-    scam_count = sum(1 for post in labeled_posts if post.get("is_scam") == "scam")
+    scam_count = sum(1 for post in labeled_posts if post.get("is_scam") == "potential_scam")
     not_scam_count = sum(1 for post in labeled_posts if post.get("is_scam") == "not_scam")
     error_count = sum(1 for post in labeled_posts if post.get("is_scam") == "error")
     
     print("\n--- Classification Results ---")
     print(f"Total posts: {len(labeled_posts)}")
-    print(f"Scams: {scam_count} ({scam_count/len(labeled_posts)*100:.1f}%)")
+    print(f"Potential Scams: {scam_count} ({scam_count/len(labeled_posts)*100:.1f}%)")
     print(f"Not scams: {not_scam_count} ({not_scam_count/len(labeled_posts)*100:.1f}%)")
     print(f"Errors: {error_count} ({error_count/len(labeled_posts)*100:.1f}%)")
     print("-----------------------------")

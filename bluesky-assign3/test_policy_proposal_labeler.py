@@ -45,7 +45,7 @@ def main():
         post_id = row["post_id"]
         text = row["text"]
         creator = row.get("creator", "unknown")
-        expected_label = row["is_scam"]  # "scam" or "not_scam"
+        expected_label = row["is_scam"]  # "potential_scam" or "not_scam"
         
         # Create post data dictionary from the CSV row
         post_data = {
@@ -98,8 +98,8 @@ def main():
         })
         
         # Store labels for metrics calculation (convert string labels to binary)
-        y_true.append(1 if expected_label == "scam" else 0)
-        y_pred.append(1 if predicted_label == "scam" else 0)
+        y_true.append(1 if expected_label == "potential_scam" else 0)
+        y_pred.append(1 if predicted_label == "potential_scam" else 0)
     
     # Write results to CSV
     with open(args.output_csv, 'w', newline='', encoding='utf-8') as f:
@@ -136,10 +136,10 @@ def main():
         
         # Print confusion matrix
         print("\nConfusion Matrix:")
-        print("                  Predicted   Predicted")
-        print("                  Not Scam    Scam")
-        print(f"Actual Not Scam    {tn}          {fp}")
-        print(f"Actual Scam         {fn}          {tp}")
+        print("                        Predicted   Predicted")
+        print("                        Not Scam    Potential Scam")
+        print(f"Actual Not Scam        {tn}          {fp}")
+        print(f"Actual Potential Scam  {fn}          {tp}")
         
         # Print metrics
         print("\nPerformance Metrics:")
