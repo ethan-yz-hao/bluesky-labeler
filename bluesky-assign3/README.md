@@ -50,15 +50,13 @@ For Part II, we've implemented a job scam detection system that can identify fra
 
 -   **Pattern-Based Detection**: Uses regex patterns to identify common job scam indicators
 -   **Multi-factor Analysis**: Considers earnings claims, barrier-to-entry promises, and suspicious calls-to-action
--   **Transparent Explanations**: Provides reasoning behind classifications for better understanding
--   **Configurable Threshold**: Adjustable sensitivity to balance precision and recall
 
 ### Requirements
 
 To run the job scam detection system, you'll need to install the following dependencies:
 
 ```bash
-pip install atproto python-dotenv pandas scikit-learn
+pip install -r requirements.txt
 ```
 
 ### Configuration
@@ -68,6 +66,7 @@ The system requires the following environment variables in a `.env` file:
 ```
 USERNAME=your_username
 PW=your_password
+OPENAI_API_KEY=your_openai_api_key
 ```
 
 ### Usage
@@ -75,13 +74,13 @@ PW=your_password
 You can analyze individual posts for job scam content:
 
 ```bash
-python -m pylabel.policy_proposal_labeler --url https://bsky.app/profile/user.bsky.social/post/postid --threshold 0.5
+python -m pylabel.policy_proposal_labeler --url https://bsky.app/profile/user.bsky.social/post/postid
 ```
 
 Or test the system on a dataset of posts:
 
 ```bash
-python test_policy_proposal_labeler.py labeled_money_posts.csv results.csv --threshold 0.5
+python .\test_policy_proposal_labeler.py labeled_money_posts.csv money_results.csv money_error.csv
 ```
 
 ### How It Works
@@ -92,8 +91,6 @@ python test_policy_proposal_labeler.py labeled_money_posts.csv results.csv --thr
     - Zero-barrier promises ("no experience needed")
     - External platform funneling (Telegram/WhatsApp links)
 3. **Call-to-Action Analysis**: Identifies suspicious CTAs that pressure users to take immediate action
-4. **Probability Scoring**: Combines multiple signals to generate a scam probability score
-5. **Threshold-Based Classification**: Uses configurable threshold to make final determination
 
 ### Data Collection
 
@@ -102,15 +99,5 @@ The test dataset was created using:
 -   A custom Bluesky hashtag scraper targeting money-making related tags
 -   Manual labeling supplemented by GPT-4 analysis for ground truth
 -   Diverse post collection across multiple hashtags and content types
-
-### Output Format
-
-The system produces detailed analysis results including:
-
--   Job scam probability score (0.0-1.0)
--   Binary classification (scam or not)
--   Explanation of the classification decision
--   Detection method used
--   Matched scam patterns (if any)
 
 This implementation provides an effective tool for identifying potentially harmful job scams on social platforms, helping protect users from financial fraud and exploitation.

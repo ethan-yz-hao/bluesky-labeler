@@ -164,7 +164,7 @@ class PolicyProposalLabeler:
         """Initialize the job scam detector with regex patterns."""
         pass
     
-    def predict(self, post: Dict, threshold: float = 0.5) -> Dict[str, Any]:
+    def predict(self, post: Dict) -> Dict[str, Any]:
         """
         Predict if a post is a job scam using regex patterns.
         
@@ -225,7 +225,6 @@ class PolicyProposalLabeler:
 def main():
     parser = argparse.ArgumentParser(description='Analyze and label job scams in a Bluesky post')
     parser.add_argument('--url', type=str, required=True, help='URL of the Bluesky post to analyze')
-    parser.add_argument('--threshold', type=float, default=0.5, help='Job scam probability threshold')
     parser.add_argument('--output', type=str, default='job_scam_analysis.json', help='Output JSON file')
     parser.add_argument('--label', type=str, default='job-scam', help='Label to apply to job scam posts')
     parser.add_argument('--no-label', action='store_true', help='Only analyze post, do not apply label')
@@ -250,15 +249,13 @@ def main():
     print(f"Text: {post_data['text']}")
     print(f"Images: {len(post_data['image_urls'])}")
     
-    result = detector.predict(post_data, threshold=args.threshold)
+    result = detector.predict(post_data)
     
     # Print analysis results
     print("\nAnalysis Results:")
     print("-" * 80)
     print(f"Detection Method: {result.get('method', 'unknown')}")
-    print(f"Job Scam Probability: {result['scam_probability']:.4f}")
-    print(f"Classification: {'JOB SCAM' if result['is_job_scam'] else 'NOT A JOB SCAM'}")
-    print(f"Explanation: {result.get('explanation', 'No explanation provided')}")
+    print(f"Classification: {'Potential Job Scam' if result['is_job_scam'] == 'potential_scam' else 'Not a Job Scam'}")
     print("-" * 80)
     
     # Save results
