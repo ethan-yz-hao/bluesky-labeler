@@ -1,4 +1,4 @@
-"""Script for testing the automated hate speech labeler"""
+"""Script for testing the automated job scam labeler using labeled money posts data"""
 
 import argparse
 import csv
@@ -6,37 +6,25 @@ import os
 from typing import List, Dict, Any
 
 import pandas as pd
-from atproto import Client
-from dotenv import load_dotenv
 from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
 
-from pylabel.policy_proposal_labeler import HateSpeechDetector, extract_post_data
-
-load_dotenv(override=True)
-USERNAME = os.getenv("USERNAME")
-PW = os.getenv("PW")
+from pylabel.policy_proposal_labeler import PolicyProposalLabeler
 
 def main():
     """
     Main function for the test script
     """
-    client = Client()
-    labeler_client = None
-    client.login(USERNAME, PW)
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("input_csv", type=str, help="Path to CSV file with post URLs and expected labels")
+    parser.add_argument("input_csv", type=str, help="Path to CSV file with labeled posts (labeled_money_posts.csv)")
     parser.add_argument("output_csv", type=str, help="Path to output CSV file for results")
-    parser.add_argument("--threshold", type=float, default=0.5, help="Hate speech probability threshold")
-    parser.add_argument("--model", type=str, default="gpt-4o", help="OpenAI model to use")
-    parser.add_argument("--emit_labels", action="store_true", help="Apply labels to posts")
+    parser.add_argument("--threshold", type=float, default=0.2, help="Job scam probability threshold")
     args = parser.parse_args()
 
-    # Initialize hate speech detector
-    detector = HateSpeechDetector(model_name=args.model)
+    # Initialize job scam detector
+    detector = PolicyProposalLabeler()
 
     # Load input data
-    urls_df = pd.read_csv(args.input_csv)
+    posts_df = pd.read_csv(args.input_csv)
     
     # Prepare results list
     results: List[Dict[str, Any]] = []
@@ -46,60 +34,62 @@ def main():
     y_pred = []
     
     num_correct = 0
-    total = urls_df.shape[0]
+    total = posts_df.shape[0]
     
-    for index, row in urls_df.iterrows():
-        url = row["post_url"]
-        expected_label = row["label"]
+    for index, row in posts_df.iterrows():
+        # Extract data from the row
+        post_id = row["post_id"]
+        text = row["text"]
+        creator = row.get("creator", "unknown")
+        expected_label = row["is_scam"]  # "scam" or "not_scam"
         
-        # Extract post data
-        post_data = extract_post_data(client, url)
-        
-        if not post_data:
-            print(f"Failed to extract data from post URL: {url}")
-            results.append({
-                "post_url": url,
-                "expected_label": expected_label,
-                "predicted_label": "Error",
-                "hate_probability": 0.0,
-                "correct": False,
-                "explanation": "Failed to extract post data"
-            })
-            continue
+        # Create post data dictionary from the CSV row
+        post_data = {
+            'uri': f"at://{creator}/app.bsky.feed.post/{post_id}",
+            'text': text,
+            'image_urls': [],  # No images in this test
+            'url': f"https://bsky.app/profile/{creator}/post/{post_id}",
+            'author': creator,
+            'hashtag': row.get("hashtag", "")
+        }
         
         # Analyze post
-        print(f"Analyzing post {index+1}/{total}: {url}")
+        print(f"Analyzing post {index+1}/{total}: {post_id}")
         result = detector.predict(post_data, threshold=args.threshold)
         
-        # Determine predicted label
-        predicted_label = "Hate Speech" if result.get("is_hate_speech", False) else "Not Hate Speech"
+        # Determine predicted label (convert to match the format in the CSV)
+        predicted_label = "scam" if result.get("is_job_scam", False) else "not_scam"
         
         # Check if prediction matches expected label
         is_correct = predicted_label == expected_label
         if is_correct:
             num_correct += 1
         else:
-            print(f"For {url}, detector produced '{predicted_label}', expected '{expected_label}'")
+            print(f"For post {post_id}, detector produced '{predicted_label}', expected '{expected_label}'")
+            print(f"Text: {text[:100]}...")
         
         # Add to results
         results.append({
-            "post_url": url,
+            "post_id": post_id,
+            "text": text[:50] + "..." if len(text) > 50 else text,  # Truncate long text for readability
+            "creator": creator,
             "expected_label": expected_label,
             "predicted_label": predicted_label,
-            "hate_probability": result.get("hate_probability", 0.0),
+            "scam_probability": result.get("scam_probability", 0.0),
             "correct": is_correct,
             "explanation": result.get("explanation", "No explanation provided"),
-            "method": result.get("method", "unknown")
+            "method": result.get("method", "unknown"),
+            "confidence": row.get("confidence", 0)  # Include original confidence if available
         })
         
-        # Store labels for metrics calculation
-        y_true.append(1 if expected_label == "Hate Speech" else 0)
-        y_pred.append(1 if predicted_label == "Hate Speech" else 0)
+        # Store labels for metrics calculation (convert string labels to binary)
+        y_true.append(1 if expected_label == "scam" else 0)
+        y_pred.append(1 if predicted_label == "scam" else 0)
     
     # Write results to CSV
     with open(args.output_csv, 'w', newline='', encoding='utf-8') as f:
-        fieldnames = ["post_url", "expected_label", "predicted_label", "hate_probability", 
-                      "correct", "explanation", "method"]
+        fieldnames = ["post_id", "text", "creator", "expected_label", "predicted_label", 
+                      "scam_probability", "correct", "explanation", "method", "confidence"]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for result in results:
@@ -121,9 +111,9 @@ def main():
         # Print confusion matrix
         print("\nConfusion Matrix:")
         print("                  Predicted   Predicted")
-        print("                  Not Hate    Hate")
-        print(f"Actual Not Hate    {tn}          {fp}")
-        print(f"Actual Hate         {fn}          {tp}")
+        print("                  Not Scam    Scam")
+        print(f"Actual Not Scam    {tn}          {fp}")
+        print(f"Actual Scam         {fn}          {tp}")
         
         # Print metrics
         print("\nPerformance Metrics:")
