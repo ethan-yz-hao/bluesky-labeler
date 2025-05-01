@@ -4,4 +4,7 @@ numpy
 atproto
 python-dotenv
 openai
-spacy
+perception
+requests
+Pillow
+opencv-python
