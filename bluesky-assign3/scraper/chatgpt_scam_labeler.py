@@ -19,7 +19,7 @@ client = openai.OpenAI(api_key=OPENAI_API_KEY)
 # Configuration
 INPUT_FILE = "bluesky_money_posts.json"
 OUTPUT_FILE = "labeled_money_posts.csv"
-MAX_WORKERS = 3  # Reduced from 5 to avoid rate limits
+MAX_WORKERS = 5
 MAX_RETRIES = 5  # Maximum number of retries for rate-limited requests
 
 def load_posts():
@@ -29,7 +29,7 @@ def load_posts():
 
 def classify_post(post):
     """
-    Use ChatGPT to classify if a post is a scam or not.
+    Use ChatGPT to classify if a post is a money-making scam or not.
     Returns the post with added classification.
     """
     retries = 0
@@ -37,20 +37,25 @@ def classify_post(post):
         try:
             # Create prompt for ChatGPT
             prompt = f"""
-            Analyze the following social media post and determine if it's a job scam or not.
+            Analyze the following social media post and determine if it's a money-making scam that promises easy income with minimal effort.
             
             POST: {post['text']}
             HASHTAG: #{post['hashtag']}
             SEARCH QUERY: {post.get('search_query', 'N/A')}
             
-            Common signs of job scams include:
-            - Promises of high earnings with minimal effort or time
-            - No experience or qualifications needed
-            - Vague job descriptions
-            - Requests to contact via external messaging apps (WhatsApp, Telegram)
-            - Requests for payment or personal information upfront
-            - Too-good-to-be-true offers
-            - Urgency or pressure tactics
+            Focus SPECIFICALLY on identifying posts that claim people can make money easily with minimal effort or time investment.
+            Common signs include:
+            - Promises of high/easy earnings with minimal work
+            - "Get rich quick" schemes
+            - Vague descriptions of how money is actually earned
+            - Requests to contact via external messaging apps (WhatsApp, Telegram) for money-making opportunities
+            - Unrealistic income claims
+            
+            DO NOT classify as scams:
+            - Regular job postings (even if suspicious)
+            - NSFW content or adult services
+            - General spam that doesn't specifically promise easy money
+            - Cryptocurrency discussions that don't promise easy earnings
             
             Classify as either "scam" or "not_scam" and provide a brief explanation.
             Return your answer in JSON format:
@@ -61,7 +66,7 @@ def classify_post(post):
             response = client.chat.completions.create(
                 model="gpt-4o",  # or "gpt-3.5-turbo" for a cheaper option
                 messages=[
-                    {"role": "system", "content": "You are an expert at identifying job scams and fraudulent money-making schemes."},
+                    {"role": "system", "content": "You are an expert at identifying money-making scams that promise easy income with minimal effort. Only classify posts as scams if they explicitly promise easy money."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,  # Low temperature for more consistent results
@@ -106,7 +111,7 @@ def process_batch(batch):
     results = []
     for post in batch:
         # Add significant delay between requests to avoid rate limiting
-        delay = 1 + random.uniform(0.5, 2.0)  # 1.5-3 seconds between requests
+        delay = 0.5 + random.uniform(0.5, 1.0)  # 0.5-1.5 seconds between requests
         time.sleep(delay)
         results.append(classify_post(post))
     return results

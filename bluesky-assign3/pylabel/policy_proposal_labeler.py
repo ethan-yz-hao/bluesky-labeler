@@ -21,25 +21,48 @@ GENERAL_JOB_KEYWORDS = [
 SCAM_PATTERNS = {
     # A. pay-to-earn / social-task grifts
     "social_tasks": [
+        # original …
         r"earn\s+\$?\d+\s*(/|per)?\s*(day|week|hour|hr|month)\b",
         r"make\s+\$?\d+\s*(/|per)?\s*(day|week|hour|hr|month)\b",
         r"\$?\d+\s+per\s+(day|week|hour|hr|month)\b",
         r"get paid\s+\$?\d+\s+(daily|weekly|hourly)\b",
         r"like (tweets|posts) (and|&) get paid",
         r"get paid to (retweet|like|share)",
+        # new …
+        r"(like|click ads|surveys|data entry)\s*\w*\s*(get paid|earn|\$\d+)",
+        r"work\s+\d+\s*hours?.*?\b(day|home)\b",          # “work 2 hours a day / work 3 hours home”
     ],
 
-    # B. zero-barrier promises
+    # B. zero-barrier promises & “too-good-to-be-true” hooks
     "no_barrier": [
+        # original …
         r"no experience (needed|required)",
         r"work from home.*start (today|now)",
         r"quick cash", r"easy money", r"instant payout",
         r"daily payout", r"same-day pay",
+        # new …
+        r"earn.*?(no experience|no degree|basic knowledge)",
+        r"easy money.*?(work from home|online)",
+        r"quick cash.*?(today|sign up)",
     ],
 
+    # C. funnels that push victims off-platform
     "funnel": [
+        # original …
         r"telegram\.me/", r"t\.me/", r"join our telegram",
         r"whatsapp.*\+?\d{6,}",
+        # new …
+        r"DM\s+for\s+details",
+        r"whatsapp.*earn",
+        r"telegram.*earn",
+    ],
+
+    # D. bait hashtags (single pattern for efficiency)
+    "hashtags": [
+        r"#(?:earnmoneyonline|earnfromhome|quickcash|easymoney|fastcash|getpaid|"
+        r"paidinstantly|passiveincome|reviewandearn|likeandgetpaid|payperlike|"
+        r"clicktask|paysurvey|dmforinfo|linkinbio|telegramlink|whatsappme|"
+        r"100aday|500aweek|5kmonth)\b",
     ],
 }
 
@@ -51,14 +74,49 @@ CTA_KEYWORDS = [
 ]
 CTA_REGEX = re.compile("|".join(CTA_KEYWORDS), re.IGNORECASE)
 
-def is_scam_by_regex(text: str) -> bool:
-    """True if text matches *any* scam pattern."""
+
+# ----------------------------------------------------------------------
+# helpers ──────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------
+
+def _matched_patterns(text: str):
+    """
+    Return two booleans and a list:
+        has_other  – any match outside the 'hashtags' bucket
+        has_hash   – any match in the 'hashtags' bucket
+        matches    – list[str] of "<bucket>: <regex>" for explanation
+    """
+    has_other, has_hash = False, False
+    matches = []
+
     tl = text.lower()
-    for bucket in SCAM_PATTERNS.values():
-        for pattern in bucket:
-            if re.search(pattern, tl, flags=re.IGNORECASE):
-                return True
-    return False
+
+    # Pass 1: look at every bucket except hashtags -------------
+    for bucket, patterns in SCAM_PATTERNS.items():
+        if bucket == "hashtags":
+            continue
+        for pat in patterns:
+            if re.search(pat, tl, re.IGNORECASE):
+                has_other = True
+                matches.append(f"{bucket}: {pat}")
+
+    # Pass 2: only *now* do we bother with the hashtag bucket --
+    if has_other:
+        for pat in SCAM_PATTERNS["hashtags"]:
+            if re.search(pat, tl, re.IGNORECASE):
+                has_hash = True
+                matches.append(f"hashtags: {pat}")
+
+    return has_other, has_hash, matches
+
+
+def is_scam_by_regex(text: str) -> bool:
+    """
+    True  → at least one *non-hashtag* pattern matched  
+    False → either nothing matched or only hashtags matched
+    """
+    has_other, _, _ = _matched_patterns(text)
+    return has_other
 
 def post_from_url(client: Client, url: str):
     """
@@ -142,7 +200,8 @@ class PolicyProposalLabeler:
             is_job_related = any(kw.lower() in text.lower() for kw in GENERAL_JOB_KEYWORDS)
             
             # Check for scam patterns
-            money_bait = is_scam_by_regex(text)
+            has_other, has_hash, matched_patterns = _matched_patterns(text)
+            money_bait = has_other
             has_cta = CTA_REGEX.search(text) is not None
             
             # Determine which patterns matched

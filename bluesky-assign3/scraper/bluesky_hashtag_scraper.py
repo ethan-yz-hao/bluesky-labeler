@@ -22,8 +22,8 @@ HASHTAGS = [
     "likeandgetpaid", "payperlike", "clicktask", "paysurvey", "dmforinfo", 
     "linkinbio", "telegramlink", "whatsappme", "100aday", "500aweek", "5kmonth"
 ]
-TARGET_POSTS = 1000  # Total posts to collect
-POSTS_PER_HASHTAG = 200  # Target posts per hashtag
+TARGET_POSTS = 300  # Total posts to collect
+POSTS_PER_HASHTAG = 100  # Target posts per hashtag
 
 def search_posts_by_hashtag(hashtag, max_posts):
     """
@@ -155,10 +155,19 @@ def main():
     all_posts = []
     
     for hashtag in HASHTAGS:
-        print(f"\n🔎 Collecting posts with #{hashtag}...")
-        posts = search_posts_by_hashtag(hashtag, POSTS_PER_HASHTAG)
+        # Check if we've already reached the overall target
+        if len(all_posts) >= TARGET_POSTS:
+            print(f"\n🎯 Reached overall target of {TARGET_POSTS} posts. Stopping collection.")
+            break
+            
+        # Calculate how many more posts we need
+        remaining_posts = TARGET_POSTS - len(all_posts)
+        posts_to_collect = min(POSTS_PER_HASHTAG, remaining_posts)
+        
+        print(f"\n🔎 Collecting posts with #{hashtag}... (need {posts_to_collect} more to reach target)")
+        posts = search_posts_by_hashtag(hashtag, posts_to_collect)
         all_posts.extend(posts)
-        print(f"✅ Collected {len(posts)} posts with #{hashtag}")
+        print(f"✅ Collected {len(posts)} posts with #{hashtag}, total: {len(all_posts)}/{TARGET_POSTS}")
     
     # Remove duplicate posts based on identical text content
     print("\n🔍 Removing duplicate posts...")
