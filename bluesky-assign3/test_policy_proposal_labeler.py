@@ -18,7 +18,6 @@ def main():
     parser.add_argument("input_csv", type=str, help="Path to CSV file with labeled posts (labeled_money_posts.csv)")
     parser.add_argument("output_csv", type=str, help="Path to output CSV file for results")
     parser.add_argument("errors_csv", type=str, help="Path to output CSV file for incorrectly labeled posts")
-    parser.add_argument("--threshold", type=float, default=0.2, help="Job scam probability threshold")
  
     args = parser.parse_args()
 
@@ -60,7 +59,7 @@ def main():
         
         # Analyze post
         print(f"Analyzing post {index+1}/{total}: {post_id}")
-        result = detector.predict(post_data, threshold=args.threshold)
+        result = detector.predict(post_data)
         
         # Determine predicted label (convert to match the format in the CSV)
         predicted_label = "scam" if result.get("is_job_scam", False) else "not_scam"
@@ -79,7 +78,6 @@ def main():
                 "creator": creator,
                 "expected_label": expected_label,
                 "predicted_label": predicted_label,
-                "scam_probability": result.get("scam_probability", 0.0),
                 "explanation": result.get("explanation", "No explanation provided"),
                 "method": result.get("method", "unknown"),
                 "confidence": row.get("confidence", 0),
@@ -93,7 +91,6 @@ def main():
             "creator": creator,
             "expected_label": expected_label,
             "predicted_label": predicted_label,
-            "scam_probability": result.get("scam_probability", 0.0),
             "correct": is_correct,
             "explanation": result.get("explanation", "No explanation provided"),
             "method": result.get("method", "unknown"),
@@ -107,7 +104,7 @@ def main():
     # Write results to CSV
     with open(args.output_csv, 'w', newline='', encoding='utf-8') as f:
         fieldnames = ["post_id", "text", "creator", "expected_label", "predicted_label", 
-                      "scam_probability", "correct", "explanation", "method", "confidence"]
+                      "correct", "explanation", "method", "confidence"]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for result in results:
@@ -117,7 +114,7 @@ def main():
     if args.errors_csv and incorrect_predictions:
         with open(args.errors_csv, 'w', newline='', encoding='utf-8') as f:
             fieldnames = ["post_id", "text", "creator", "expected_label", "predicted_label", 
-                         "scam_probability", "explanation", "method", "confidence", "url"]
+                         "explanation", "method", "confidence", "url"]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             for result in incorrect_predictions:
